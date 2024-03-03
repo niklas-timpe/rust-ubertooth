@@ -1,25 +1,18 @@
 #![allow(dead_code)]
 #![allow(renamed_and_removed_lints)]
 #![recursion_limit = "1024"]
-extern crate libc;
-#[macro_use]
-extern crate error_chain;
-
+use anyhow::Result;
+use thiserror::Error;
 mod native;
-mod errors {
-    error_chain! {
-        errors {
-            UbertoothNativeError(t: i32) {
-                description("Ubertooth native library returned an error")
-                display("Ubertooth error {}", t)
-            }
-        }
-    }
+
+#[derive(Error, Debug)]
+pub enum UbertoothError {
+    #[error("Ubertooth native library returned an error: {0}")]
+    UbertoothNativeError(i32),
 }
-use errors::*;
 
 pub struct Ubertooth {
-    ptr: *mut native::ubertooth_t,
+    ptr : *mut native::ubertooth_t,
 }
 
 pub enum UbertoothDeviceNumber {
@@ -34,10 +27,9 @@ pub enum UbertoothDeviceNumber {
 }
 
 impl Ubertooth {
-    fn from_ptr(ptr: *mut native::ubertooth_t) -> Self {
-        Self {
-            ptr
-        }
+
+    fn from_ptr(ptr : *mut native::ubertooth_t) -> Self {
+        Ubertooth { ptr }
     }
 
     pub fn connect(&self, device_number : UbertoothDeviceNumber) -> Result<()> {
@@ -45,7 +37,7 @@ impl Ubertooth {
         unsafe {
             result = native::ubertooth_connect(self.ptr, device_number as i32);
             if result < 0 {
-                Err(ErrorKind::UbertoothNativeError(result))?
+                Err(UbertoothError::UbertoothNativeError(result))?
             } else {
                 Ok(())
             }
@@ -53,8 +45,11 @@ impl Ubertooth {
     }
 }
 
+
 fn print_version() {
-    unsafe{ native::print_version(); }
+    unsafe{
+        native::print_version();
+    }
 }
 
 fn init() -> Option<Ubertooth> {
@@ -84,7 +79,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(UbertoothNativeError(-1), State { next_error: None, backtrace: None })")]
+    #[should_panic(expected = "Ubertooth native library returned an error: -1")]
     fn start_on_unavailable_device_fails() {
         let ubertooth = init().expect("Ubertooth subsystem could not initialize");
         ubertooth.connect(UbertoothDeviceNumber::SEVEN).unwrap();
